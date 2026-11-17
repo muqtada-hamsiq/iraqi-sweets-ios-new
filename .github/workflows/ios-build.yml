@@ -1,0 +1,56 @@
+name: Build Iraqi Sweets iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          mkdir project
+          unzip -q iraqi-sweets-project.zip -d project
+          find project -name pubspec.yaml -print
+          PUBSPEC=$(find project -name pubspec.yaml -print -quit)
+          test -n "$PUBSPEC"
+          echo "PROJECT_DIR=$(dirname "$PUBSPEC")" >> "$GITHUB_ENV"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Package IPA
+        run: |
+          cd "$PROJECT_DIR"
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry Iraqi-Sweets-unsigned.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Iraqi-Sweets-unsigned-IPA
+          path: ${{ env.PROJECT_DIR }}/Iraqi-Sweets-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
